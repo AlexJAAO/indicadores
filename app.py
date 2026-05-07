@@ -5,7 +5,7 @@ import matplotlib.dates as mdates
 import os
 
 # 1. Configuración de la Página
-st.set_page_config(page_title="PGA Group - Indicadores", layout="wide")
+st.set_page_config(page_title="Indicadores Macroeconómicos - PGA Group", layout="wide")
 
 # Colores Corporativos PGA
 PGA_COLORS = {
@@ -18,7 +18,9 @@ PGA_COLORS = {
 LINE_COLORS = {
     'Inflacion BCV': '#D3D4D9',
     'Inf. Acum BCV': '#ED7D31',
-    'Inflación Acumulada': '#ED7D31',
+    'Inflación Mensual BCV': '#D3D4D9',
+    'Devaluación Mensual BCV': '#F9C035',
+    'Devaluación Mensual USDT': '#595959',
     'Tasa bcv': '#F9C035',
     'Deval. Acum BCV': '#595959',
     'Devaluación Acumulada BCV': '#F9C035',
@@ -51,6 +53,14 @@ def load_data():
     df = df.dropna(subset=['Mes_Num'])
     df['Mes_Num'] = df['Mes_Num'].astype(int)
     df['Fecha_DT'] = pd.to_datetime(df['Año_Num'].astype(str) + '-' + df['Mes_Num'].astype(str).str.zfill(2) + '-01')
+    
+    # Crear columna de Devaluación Mensual BCV (si no existe)
+    if 'Devaluación Mensual BCV' not in df.columns and 'Deevaluación BCV' in df.columns:
+        df['Devaluación Mensual BCV'] = df['Deevaluación BCV']
+    
+    # Crear columna de Devaluación Mensual USDT
+    if 'Devaluación Mensual USDT' not in df.columns and 'Devaluación No Oficial' in df.columns:
+        df['Devaluación Mensual USDT'] = df['Devaluación No Oficial']
     
     df['Inf. Acum BCV'] = df['Inflación acumulada BCV']
     df['Deval. Acum BCV'] = df['Devaluación acumulada BCV']
@@ -102,25 +112,25 @@ def plot_pga_master(data, columns, title):
     st.pyplot(fig)
 
 # --- INTERFAZ ---
-st.title("📊 Dashboard PGA Group")
+st.title("📊 Indicadores Macroeconómicos")
 
 if df_2025.empty:
     st.error("No hay datos disponibles")
     st.stop()
 
-# PARTE 1: HISTÓRICO
-st.markdown(f"<div style='border-left:5px solid {PGA_COLORS['pumpkin']}; padding-left:10px;'><h3>1. Histórico de Mercado (Desde 2025)</h3></div>", unsafe_allow_html=True)
+# PARTE 1: INDICADORES MENSUALES
+st.markdown(f"<div style='border-left:5px solid {PGA_COLORS['pumpkin']}; padding-left:10px;'><h3>1. Indicadores Mensuales</h3></div>", unsafe_allow_html=True)
 col_h1, col_h2, col_h3, col_h4 = st.columns(4)
 
-h_inf = col_h1.checkbox("📉 Inf. Mes")
-h_acum = col_h2.checkbox("📈 Inf. Acum")
-h_deval = col_h3.checkbox("🏛️ Deval. Acum")
+h_inf = col_h1.checkbox("📉 Inflación Mensual BCV")
+h_deval_bcv = col_h2.checkbox("🏛️ Devaluación Mensual BCV")
+h_deval_usdt = col_h3.checkbox("💱 Devaluación Mensual USDT")
 h_tasa = col_h4.checkbox("💰 Tasa BCV")
 
 sel_h = []
 if h_inf: sel_h.append('Inflacion BCV')
-if h_acum: sel_h.append('Inf. Acum BCV')
-if h_deval: sel_h.append('Deval. Acum BCV')
+if h_deval_bcv: sel_h.append('Devaluación Mensual BCV')
+if h_deval_usdt: sel_h.append('Devaluación Mensual USDT')
 if h_tasa: sel_h.append('Tasa bcv')
 
 if sel_h:
@@ -135,12 +145,12 @@ if sel_h:
         
         display_df = df_2025[['Año', 'Mes'] + available_cols].copy()
         st.dataframe(display_df.style.format(formatos_h), hide_index=True)
-        plot_pga_master(df_2025, available_cols, "Evolución de Indicadores")
+        plot_pga_master(df_2025, available_cols, "Evolución de Indicadores Mensuales")
 
 st.divider()
 
-# --- PARTE 2: SIMULADOR (COMPLETAMENTE REWRITE) ---
-st.markdown(f"<div style='border-left:5px solid {PGA_COLORS['pumpkin']}; padding-left:10px;'><h3>2. Simulador de Acumulación Dinámica</h3></div>", unsafe_allow_html=True)
+# --- PARTE 2: INDICADORES ACUMULADOS ---
+st.markdown(f"<div style='border-left:5px solid {PGA_COLORS['pumpkin']}; padding-left:10px;'><h3>2. Indicadores Acumulados</h3></div>", unsafe_allow_html=True)
 
 # Obtener fechas únicas ordenadas
 df_sorted = df_2025.sort_values('Fecha_DT')
@@ -153,8 +163,8 @@ if len(date_labels) > 0:
     
     col_s1, col_s2, col_s3 = st.columns(3)
     s_inf = col_s1.checkbox("Inflación Acumulada", value=True)
-    s_bcv = col_s2.checkbox("Devaluación BCV")
-    s_usdt = col_s3.checkbox("Devaluación USDT")
+    s_bcv = col_s2.checkbox("Devaluación Acumulada BCV")
+    s_usdt = col_s3.checkbox("Devaluación Acumulada USDT")
     
     sel_s = []
     if s_inf: sel_s.append('Inflación Acumulada')
@@ -166,16 +176,29 @@ if len(date_labels) > 0:
         df_filtered = df_2025[df_2025['Fecha_DT'] >= selected_date].copy()
         
         if not df_filtered.empty:
-            # Obtener valores de referencia del primer mes (mes base)
+            # Obtener valores del mes base (primer registro)
             first_row = df_filtered.iloc[0]
-            ref_tasa_bcv = first_row['Tasa bcv']
-            ref_tasa_usdt = first_row['Tasa Promedio USDT'] if 'Tasa Promedio USDT' in df_filtered.columns else 1
             
-            # Calcular acumulados
+            # CORRECCIÓN: Para devaluación, empezar en 0 en el mes base
+            # y luego acumular las variaciones mensuales
+            
+            # 1. Inflación Acumulada (producto de (1+inflación mensual) - 1)
             df_filtered['Inflación Acumulada'] = (1 + df_filtered['Inflacion BCV']).cumprod() - 1
-            df_filtered['Devaluación Acumulada BCV'] = (df_filtered['Tasa bcv'] / ref_tasa_bcv) - 1
             
-            if 'Tasa Promedio USDT' in df_filtered.columns:
+            # 2. Devaluación Acumulada BCV (producto de las devaluaciones mensuales)
+            if 'Devaluación Mensual BCV' in df_filtered.columns:
+                # Empezar desde 1 y acumular multiplicativamente
+                df_filtered['Devaluación Acumulada BCV'] = (1 + df_filtered['Devaluación Mensual BCV']).cumprod() - 1
+            else:
+                # Fallback: usar tasas
+                ref_tasa_bcv = first_row['Tasa bcv']
+                df_filtered['Devaluación Acumulada BCV'] = (df_filtered['Tasa bcv'] / ref_tasa_bcv) - 1
+            
+            # 3. Devaluación Acumulada USDT (producto de las devaluaciones mensuales)
+            if 'Devaluación Mensual USDT' in df_filtered.columns:
+                df_filtered['Devaluación Acumulada USDT'] = (1 + df_filtered['Devaluación Mensual USDT']).cumprod() - 1
+            elif 'Tasa Promedio USDT' in df_filtered.columns:
+                ref_tasa_usdt = first_row['Tasa Promedio USDT']
                 df_filtered['Devaluación Acumulada USDT'] = (df_filtered['Tasa Promedio USDT'] / ref_tasa_usdt) - 1
             else:
                 df_filtered['Devaluación Acumulada USDT'] = 0.0
@@ -187,7 +210,7 @@ if len(date_labels) > 0:
                 format_dict = {col: "{:.2%}" for col in available_cols}
                 display_df = df_filtered[['Año', 'Mes'] + available_cols].copy()
                 st.dataframe(display_df.style.format(format_dict), hide_index=True)
-                plot_pga_master(df_filtered, available_cols, f"Acumulación desde {selected_date_label}")
+                plot_pga_master(df_filtered, available_cols, f"Indicadores Acumulados desde {selected_date_label}")
             else:
                 st.warning("No se encontraron las columnas seleccionadas")
         else:
